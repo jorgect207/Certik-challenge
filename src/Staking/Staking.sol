@@ -565,7 +565,7 @@ contract Staking is IStaking, Ownable2Step, ReentrancyGuard, Pausable {
 
         totalRawSupply += amount;
         totalBoostedSupply += boostedAmount;
-        if (_userActiveStakeCount[user] > 0) _userActiveStakeCount[user] += 1;
+        _userActiveStakeCount[user] += 1;
         _userBoostedAmount[user] += boostedAmount;
     }
 
