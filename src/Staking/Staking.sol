@@ -67,7 +67,8 @@ contract Staking is IStaking, Ownable2Step, ReentrancyGuard, Pausable {
     mapping(uint8 => LockTier) public lockTiers;
     uint8 public nextLockTierId;
 
-    mapping(address => Stake[]) internal _userStakes;
+    mapping(address => mapping(uint256 => Stake)) internal _userStakes;
+    mapping(address => uint256) internal _userStakesLength;
     mapping(address => uint256) internal _userActiveStakeCount;
     mapping(address => uint256) internal _userBoostedAmount;
 
@@ -148,7 +149,7 @@ contract Staking is IStaking, Ownable2Step, ReentrancyGuard, Pausable {
     /// @param stakeId The caller's stake index to close.
     function unstake(uint256 stakeId) external nonReentrant {
         Stake storage userStake = _getUserStakeStorage(msg.sender, stakeId);
-        if (userStake.withdrawn && _userActiveStakeCount[msg.sender] > 0) revert StakeAlreadyWithdrawn(stakeId);
+        if (userStake.withdrawn) revert StakeAlreadyWithdrawn(stakeId);
         if (block.timestamp < userStake.unlockTime) revert StakeLocked(stakeId, userStake.unlockTime);
 
         _updateRewardAll(msg.sender);
@@ -156,11 +157,14 @@ contract Staking is IStaking, Ownable2Step, ReentrancyGuard, Pausable {
         uint128 amount = userStake.amount;
         uint128 boostedAmount = userStake.boostedAmount;
 
-        userStake.withdrawn = true;
-        totalRawSupply -= amount;
-        totalBoostedSupply -= boostedAmount;
-        if (_userActiveStakeCount[msg.sender] > 0) _userActiveStakeCount[msg.sender] -= 1;
-        _userBoostedAmount[msg.sender] -= _userBoostedAmount[msg.sender] >= boostedAmount ? boostedAmount : _userBoostedAmount[msg.sender];
+     
+         if (_userActiveStakeCount[msg.sender] > 0) { // not need to update the variables above if the user has no stake
+            userStake.withdrawn = true;
+            totalRawSupply -= amount;
+            totalBoostedSupply -= boostedAmount;
+            _userActiveStakeCount[msg.sender] -= 1;
+            _userBoostedAmount[msg.sender] -= boostedAmount;
+        }
 
         stakingToken.safeTransfer(msg.sender, amount);
 
@@ -313,7 +317,11 @@ contract Staking is IStaking, Ownable2Step, ReentrancyGuard, Pausable {
     /// @param user The user to inspect.
     /// @return stakes The user's stake array.
     function getUserStakes(address user) external view returns (Stake[] memory stakes) {
-        return _userStakes[user];
+        uint256 len = _userStakesLength[user];
+        stakes = new Stake[](len);
+        for (uint256 i; i < len; ++i) {
+            stakes[i] = _userStakes[user][i];
+        }
     }
 
     /// @notice Returns one stake position by id.
@@ -321,7 +329,7 @@ contract Staking is IStaking, Ownable2Step, ReentrancyGuard, Pausable {
     /// @param stakeId The stake index to fetch.
     /// @return userStake The requested stake position.
     function getUserStake(address user, uint256 stakeId) external view returns (Stake memory userStake) {
-        if (stakeId >= _userStakes[user].length) revert StakeNotFound(stakeId);
+        if (stakeId >= _userStakesLength[user]) revert StakeNotFound(stakeId);
         return _userStakes[user][stakeId];
     }
 
@@ -549,19 +557,18 @@ contract Staking is IStaking, Ownable2Step, ReentrancyGuard, Pausable {
     {
         boostedAmount = _toUint128(Math.mulDiv(amount, tier.multiplierBps, BPS));
         uint64 currentTime = _currentTime();
-        unlockTime = _currentTimePlus(tier.duration);//@audit this unlock time is more time that the actual periodFinish  reward in that case if user final time stamp is 900 and the final reward is lets say 500 the user will be with the funds locked until that time
+        unlockTime = _currentTimePlus(tier.duration);
 
-        stakeId = _userStakes[user].length;
-        _userStakes[user].push(
-            Stake({
-                amount: amount,
-                boostedAmount: boostedAmount,
-                tierId: tierId,
-                startTime: currentTime,
-                unlockTime: unlockTime,
-                withdrawn: false
-            })
-        );
+        stakeId = _userStakesLength[user];
+        _userStakes[user][stakeId] = Stake({
+            amount: amount,
+            boostedAmount: boostedAmount,
+            tierId: tierId,
+            startTime: currentTime,
+            unlockTime: unlockTime,
+            withdrawn: false
+        });
+        _userStakesLength[user] += 1;
 
         totalRawSupply += amount;
         totalBoostedSupply += boostedAmount;
@@ -647,7 +654,7 @@ contract Staking is IStaking, Ownable2Step, ReentrancyGuard, Pausable {
     }
 
     function _getUserStakeStorage(address user, uint256 stakeId) internal view returns (Stake storage userStake) {
-        if (stakeId >= _userStakes[user].length) revert StakeNotFound(stakeId);
+        if (stakeId > _userStakesLength[user]) revert StakeNotFound(stakeId);
         userStake = _userStakes[user][stakeId];
     }
 
