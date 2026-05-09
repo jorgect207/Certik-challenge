@@ -1,0 +1,97 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stump the AI Auditor — PoC Harness Template
+//
+// Copy this file to `test/PlantPoC.t.sol` (remove the .example suffix), then:
+//   1. Modify one of the three base contracts (≤50 lines).
+//   2. Implement the TODOs below to demonstrate the exploit.
+//   3. `forge test --match-path test/PlantPoC.t.sol -vvv`
+//
+// This file is GIT-IGNORED once you rename it (the example is tracked; the
+// working copy is not) so you can iterate privately. Your final submission
+// does NOT need to include this file — but including a PoC as supporting
+// evidence often strengthens your writeup.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import {BaseTest} from "./helpers/BaseTest.sol";
+import {MockERC20} from "src/mocks/MockERC20.sol";
+
+// Pick the contract you're attacking and uncomment the import.
+// import {Vault} from "src/Vault/Vault.sol";
+// import {Staking} from "src/Staking/Staking.sol";
+// import {Lending} from "src/Lending/Lending.sol";
+// import {PriceOracle} from "src/PriceOracle.sol";
+
+contract PlantPoC is BaseTest {
+    // ─── Target contract + any test doubles ────────────────────────────────
+    // Vault internal target;
+    // Staking internal target;
+    // Lending internal target;
+
+    MockERC20 internal token;
+    address internal attacker;
+    address internal victim;
+
+    function setUp() public override {
+        super.setUp();
+
+        attacker = makeAddr("attacker");
+        victim = makeAddr("victim");
+
+        // Deploy the target contract with reasonable defaults.
+        // See test/Vault.t.sol / test/Staking.t.sol / test/Lending.t.sol
+        // for setup patterns — copy the constructor args you need.
+        //
+        // Example (Vault):
+        //   token = deployMockToken("USDC", 6);
+        //   target = new Vault(owner, feeRecipient, 1000 /* perf fee */, 100 /* mgmt fee */, 100 /* timelock blocks */);
+        //   vm.prank(owner);
+        //   target.addAsset(address(token));
+
+        // Seed balances.
+        // mintAndApprove(token, victim, address(target), 1_000e6);
+        // mintAndApprove(token, attacker, address(target), 1_000e6);
+    }
+
+    // ─── Your PoC test ──────────────────────────────────────────────────────
+    //
+    // Write a test that:
+    //   1. Sets up normal-looking protocol state (a victim holds shares /
+    //      supplies collateral / is staked).
+    //   2. The attacker executes a sequence of calls that the plant makes
+    //      possible but the base contract would have prevented.
+    //   3. Assertions show the fund drain / freeze / insolvency concretely
+    //      (balances before vs. after).
+    //
+    // Use `vm.startPrank(attacker)` to impersonate. Use `vm.warp()` and
+    // `vm.roll()` to advance time/blocks. BaseTest provides `advanceSeconds()`
+    // and `advanceBlocks()` if you want both at once in realistic ratio.
+
+    function testPoC_exploit_drains_user_funds() public {
+        // TODO: 1) Set up a normal deposit / stake / supply from `victim`.
+        //       2) Attacker calls the planted path to extract value.
+        //       3) Assert attacker balance rose by approximately the victim's
+        //          deposit, or total protocol assets fell by ≥ some amount.
+
+        uint256 attackerBalanceBefore = token.balanceOf(attacker);
+
+        // --- normal user action ---
+        // vm.prank(victim);
+        // target.deposit(address(token), 1_000e6, victim);
+
+        // --- exploit sequence ---
+        // vm.startPrank(attacker);
+        // target.someFunction(...);
+        // vm.stopPrank();
+
+        uint256 attackerBalanceAfter = token.balanceOf(attacker);
+        assertGt(attackerBalanceAfter, attackerBalanceBefore, "exploit did not drain value");
+
+        // Optionally, show the victim lost specifically this amount:
+        // uint256 victimShares = target.userShares(victim);
+        // uint256 victimClaim = target.convertToAssets(victimShares);
+        // assertLt(victimClaim, 1_000e6, "victim's claim not reduced");
+    }
+}
